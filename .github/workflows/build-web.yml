@@ -1,0 +1,29 @@
+name: Build RustDesk Web
+
+on:
+  workflow_dispatch:  # 手动触发
+  push:
+    branches: [main]  # 也可改成 flutter 分支
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'   # 用 RustDesk 官方推荐的版本
+          channel: stable
+
+      - name: Enable & build web
+        run: |
+          flutter config --enable-web
+          flutter pub get
+          flutter build web --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustdesk-web
+          path: build/web/
