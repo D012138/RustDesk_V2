@@ -21,9 +21,6 @@ jobs:
   build-web:
     name: build-rustdesk-web
     runs-on: ubuntu-22.04
-    defaults:
-      run:
-        working-directory: flutter   # 关键：整个 job 的默认目录
     permissions:
       contents: write
     steps:
@@ -40,6 +37,7 @@ jobs:
 
       - name: Patch Flutter
         shell: bash
+        working-directory: flutter          # 显式目录
         run: |
           cd $(dirname $(dirname $(which flutter)))
           [[ "${{ env.FLUTTER_VERSION }}" == "3.24.5" ]] && \
@@ -47,18 +45,19 @@ jobs:
 
       - name: Build web bridge & deps
         shell: bash
+        working-directory: flutter          # 显式目录
         run: |
           cd web/js
           npm install -g yarn typescript protoc
           npm install ts-proto vite@2.8
           yarn install && yarn build
-
           cd ../web
           wget -q https://github.com/rustdesk/doc.rustdesk.com/releases/download/console/web_deps.tar.gz
           tar xzf web_deps.tar.gz
 
       - name: Build web
         shell: bash
+        working-directory: flutter          # 显式目录
         run: |
           flutter config --enable-web
           flutter pub get
@@ -66,8 +65,8 @@ jobs:
 
       - name: Pack web artifact
         shell: bash
+        working-directory: flutter/build    # 产物在 flutter/build/web
         run: |
-          cd build
           cp ../web/README.md web/
           echo -e "\n\nThis build is for preview and not full functionality." >> web/README.md
           DIR="rustdesk-${{ env.TAG_NAME }}-web"
