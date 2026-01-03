@@ -1,33 +1,96 @@
-# .github/workflows/build-web.yml
 name: Build RustDesk Web
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
+  workflow_dispatch:          # 手动跑
+  workflow_call:              # 被 flutter-ci.yml 复用
+    inputs:
+      upload-artifact:
+        description: 'upload artifact'
+        type: boolean
+        default: true
+      upload-tag:
+        description: 'release tag'
+        type: string
+        default: "nightly"
+
+env:
+  FLUTTER_VERSION: "3.24.5"   # 与官方保持一致
+  TAG_NAME:      "${{ inputs.upload-tag }}"
 
 jobs:
-  web:
-    runs-on: ubuntu-latest
+  build-web:
+    name: build-rustdesk-web
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: flutter   # 全局默认目录
+    permissions:
+      contents: write
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          submodules: recursive
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2.12.0
+        with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Patch Flutter
+        shell: bash
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          [[ "${{ env.FLUTTER_VERSION }}" == "3.24.5" ]] && \
+            git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Build web bridge & deps
+        shell: bash
+        run: |
+          # 官方相同步骤：先构建 js 桥接
+          pushd web/js
+          npm install -g yarn typescript protoc
+          npm install ts-proto vite@2.8
+          yarn install && yarn build
+          popd
+
+          # 拷贝静态依赖
+          pushd web
+          wget -q https://github.com/rustdesk/doc.rustdesk.com/releases/download/console/web_deps.tar.gz
+          tar xzf web_deps.tar.gz
+          popd
 
       - name: Build web
-        working-directory: flutter      
+        shell: bash
         run: |
           flutter config --enable-web
           flutter pub get
           flutter build web --release
 
+      - name: Pack web artifact
+        shell: bash
+        run: |
+          cd build
+          cp ../web/README.md web/
+          echo -e "\n\nThis build is for preview and not full functionality." >> web/README.md
+          DIR="rustdesk-${{ env.TAG_NAME }}-web"
+          mv web "$DIR"
+          tar czf "$DIR.tar.gz" "$DIR"
+          sha256sum "$DIR.tar.gz"
+          echo "WEB_TAR=$(pwd)/$DIR.tar.gz" >> $GITHUB_ENV
+
       - name: Upload artifact
+        if: inputs.upload-artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-web
-          path: flutter/build/web
+          name: rustdesk-${{ env.TAG_NAME }}-web
+          path: ${{ env.WEB_TAR }}
+
+      - name: Publish release
+        if: inputs.upload-artifact
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: ${{ env.WEB_TAR }}
