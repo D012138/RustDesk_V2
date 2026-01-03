@@ -48,22 +48,15 @@ jobs:
       - name: Build web bridge & deps
         shell: bash
         run: |
-          # 已经在 flutter 目录，直接进子目录
+          # 已在 flutter 目录
           cd web/js
           npm install -g yarn typescript protoc
           npm install ts-proto vite@2.8
           yarn install && yarn build
 
-          # 回到 flutter 根再进 web
           cd ../web
           wget -q https://github.com/rustdesk/doc.rustdesk.com/releases/download/console/web_deps.tar.gz
           tar xzf web_deps.tar.gz
-
-          # 拷贝静态依赖
-          pushd web
-          wget -q https://github.com/rustdesk/doc.rustdesk.com/releases/download/console/web_deps.tar.gz
-          tar xzf web_deps.tar.gz
-          popd
 
       - name: Build web
         shell: bash
