@@ -24,10 +24,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      # 关键：递归拉子模块，否则 flutter 目录是空的
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Init / update submodules（保险再执行一次）
+        shell: bash
+        run: |
+          git submodule update --init --recursive
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2.12.0
@@ -37,7 +44,7 @@ jobs:
 
       - name: Patch Flutter
         shell: bash
-        working-directory: flutter          # 显式目录
+        working-directory: flutter
         run: |
           cd $(dirname $(dirname $(which flutter)))
           [[ "${{ env.FLUTTER_VERSION }}" == "3.24.5" ]] && \
@@ -45,19 +52,20 @@ jobs:
 
       - name: Build web bridge & deps
         shell: bash
-        working-directory: flutter          # 显式目录
+        working-directory: flutter
         run: |
           cd web/js
           npm install -g yarn typescript protoc
           npm install ts-proto vite@2.8
           yarn install && yarn build
+
           cd ../web
           wget -q https://github.com/rustdesk/doc.rustdesk.com/releases/download/console/web_deps.tar.gz
           tar xzf web_deps.tar.gz
 
       - name: Build web
         shell: bash
-        working-directory: flutter          # 显式目录
+        working-directory: flutter
         run: |
           flutter config --enable-web
           flutter pub get
@@ -65,7 +73,7 @@ jobs:
 
       - name: Pack web artifact
         shell: bash
-        working-directory: flutter/build    # 产物在 flutter/build/web
+        working-directory: flutter/build
         run: |
           cp ../web/README.md web/
           echo -e "\n\nThis build is for preview and not full functionality." >> web/README.md
